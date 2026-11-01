@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#eef2f8">
+<meta name="format-detection" content="telephone=no">
+<title>教室大屏</title>
+<style>
+  /* ==================== 公共 ==================== */
+  :root{
+    --bg:#eef2f8; --panel:#fff; --ink:#0d1b2a; --ink-2:#4a5a70; --ink-3:#8b9ab0;
+    --accent:#2f6bff; --accent-soft:#e8efff; --line:#dfe6f2;
+    --ok:#16a34a; --ok-soft:#e7f7ee; --warn:#f59e0b; --warn-soft:#fef3e2;
+    --shadow:0 10px 30px rgba(22,44,80,.09);
+  }
+  html.dark{
+    --bg:#0a1220; --panel:#111c30; --ink:#f2f6ff; --ink-2:#b9c6da; --ink-3:#71829b;
+    --accent:#6b9bff; --accent-soft:#16233a; --line:#1e2c45;
+    --shadow:0 18px 50px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Hiragino Sans GB",system-ui,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  .view{display:none}
+  .view.on{display:block}
+  .hidden{display:none!important}
+
+  /* ==================== 选择页 ==================== */
+  #pick{min-height:100vh;align-items:center;justify-content:center;padding:24px}
+  #pick.on{display:flex}
+  .pickbox{width:100%;max-width:520px;text-align:center}
+  .pickbox h1{font-size:26px;margin:0 0 8px;letter-spacing:.5px}
+  .pickbox p{color:var(--ink-3);font-size:15px;margin:0 0 26px;line-height:1.6}
+  .pickbtn{
+    display:block;width:100%;border:1px solid var(--line);background:#fff;border-radius:20px;
+    padding:22px;margin-bottom:14px;font-size:19px;font-weight:800;color:var(--ink);
+    cursor:pointer;box-shadow:var(--shadow);transition:.15s;text-decoration:none;
+  }
+  .pickbtn:active{transform:scale(.985)}
+  .pickbtn small{display:block;font-size:13px;font-weight:600;color:var(--ink-3);margin-top:7px}
+  .pickbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .pickbtn.primary small{color:rgba(255,255,255,.82)}
+  .topicbar{margin-top:22px;font-size:12px;color:var(--ink-3);line-height:1.7}
+
+  /* ==================== 大屏 ==================== */
+  #screenView{
+    height:100vh;grid-template-rows:auto 1fr auto;
+    padding:clamp(14px,2.2vh,30px) clamp(18px,2.6vw,46px);
+    gap:clamp(8px,1.4vh,18px);overflow:hidden;
+  }
+  #screenView.on{display:grid}
+  #screenView header{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    transition:opacity .3s ease}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;
+    font-size:clamp(16px,1.9vh,24px);letter-spacing:.5px;color:var(--ink-2)}
+  .dot{width:11px;height:11px;border-radius:50%;background:#f59e0b;
+    box-shadow:0 0 0 5px rgba(245,158,11,.16);transition:.25s}
+  .dot.on{background:#22c55e;box-shadow:0 0 0 5px rgba(34,197,94,.16)}
+  .hdr-right{display:flex;align-items:center;gap:clamp(10px,1.4vw,22px)}
+  #clock{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink-2);
+    font-size:clamp(15px,1.8vh,22px)}
+  .iconbtn{
+    border:1px solid var(--line);background:var(--panel);color:var(--ink-2);
+    width:clamp(38px,4.6vh,52px);height:clamp(38px,4.6vh,52px);border-radius:14px;
+    font-size:clamp(16px,2vh,22px);cursor:pointer;display:grid;place-items:center;transition:.18s;
+  }
+  .iconbtn:hover{border-color:var(--accent);color:var(--accent)}
+  #screenView main{position:relative;min-height:0}
+
+  #idle{
+    height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:var(--panel);border-radius:clamp(18px,2.4vh,32px);box-shadow:var(--shadow);
+    border:1px solid var(--line);padding:clamp(20px,3vh,48px);gap:clamp(10px,1.6vh,22px);
+    text-align:center;
+  }
+  .idle-title{font-size:clamp(30px,5.4vh,64px);font-weight:800;letter-spacing:1px}
+  .idle-sub{font-size:clamp(15px,2.1vh,26px);color:var(--ink-3);font-weight:500}
+  .urlrow{display:flex;align-items:center;justify-content:center;gap:clamp(18px,3vw,52px);
+    margin-top:clamp(6px,1.4vh,20px);flex-wrap:wrap}
+  .urlbox{
+    background:var(--accent-soft);border:2px dashed var(--accent);
+    border-radius:clamp(14px,1.8vh,22px);
+    padding:clamp(12px,2vh,26px) clamp(18px,2.6vw,44px);
+    font-family:Consolas,"Courier New",monospace;font-weight:700;
+    font-size:clamp(18px,2.6vh,34px);color:var(--accent);letter-spacing:.3px;
+    word-break:break-all;max-width:min(70vw,980px);
+  }
+  #qrwrap{background:#fff;padding:14px;border-radius:18px;border:1px solid var(--line);
+    display:none;box-shadow:var(--shadow)}
+  #qrwrap.on{display:block}
+  #qrwrap img,#qrwrap canvas{display:block;width:clamp(120px,18vh,200px);height:auto}
+  .hint{font-size:clamp(13px,1.7vh,19px);color:var(--ink-3)}
+
+  #msgView{
+    height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    background:var(--panel);border-radius:clamp(18px,2.4vh,32px);box-shadow:var(--shadow);
+    border:1px solid var(--line);padding:clamp(18px,3vh,54px) clamp(20px,3vw,64px);
+    overflow:hidden;position:relative;
+  }
+  #msgView::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:clamp(6px,.8vw,12px);
+    background:var(--accent);opacity:.9;
+  }
+  #msgText{
+    width:100%;text-align:center;font-weight:800;line-height:1.2;
+    white-space:pre-wrap;word-break:break-word;font-size:120px;color:var(--ink);
+  }
+  #msgMeta{margin-top:clamp(10px,2vh,26px);color:var(--ink-3);font-weight:600;
+    font-size:clamp(15px,2.1vh,26px);display:flex;gap:10px;align-items:center}
+  .sep{opacity:.4}
+
+  /* 专注模式：来消息铺满整屏（注意：padding 不能加过渡，否则量字号会量到中途尺寸） */
+  #screenView.focus{padding:6px 8px;gap:0}
+  #screenView.focus header{opacity:.35}
+  #screenView.focus header:hover{opacity:1}
+  #screenView.focus footer{display:none}
+  #screenView.focus #msgView{border-radius:10px;padding:8px 14px;box-shadow:none;border-color:transparent}
+  #screenView.focus #msgMeta{font-size:clamp(13px,1.7vh,21px);margin-top:4px}
+
+  #msgView.flash{animation:flash .85s ease-out}
+  @keyframes flash{
+    0%{box-shadow:0 0 0 0 rgba(47,107,255,.55),var(--shadow)}
+    45%{box-shadow:0 0 0 14px rgba(47,107,255,0),var(--shadow)}
+    100%{box-shadow:var(--shadow)}
+  }
+  .pop{animation:pop .42s cubic-bezier(.2,.9,.25,1)}
+  @keyframes pop{from{opacity:0;transform:translateY(26px) scale(.985)}to{opacity:1;transform:none}}
+
+  #screenView footer{min-height:clamp(30px,4.4vh,52px);display:flex;align-items:center;gap:10px;
+    overflow:hidden;padding-left:2px}
+  .chip{
+    flex:0 0 auto;max-width:26vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-size:clamp(12px,1.6vh,17px);color:var(--ink-3);background:var(--panel);
+    border:1px solid var(--line);border-radius:999px;
+    padding:clamp(4px,.8vh,9px) clamp(10px,1.2vw,18px);
+  }
+  .chip b{color:var(--ink-2);font-weight:700;margin-right:6px}
+
+  #soundTip{
+    position:fixed;right:clamp(12px,1.6vw,22px);bottom:clamp(10px,1.6vh,18px);
+    background:#f59e0b;color:#1a1205;font-weight:700;padding:9px 16px;border-radius:999px;
+    font-size:clamp(12px,1.5vh,15px);cursor:pointer;box-shadow:0 10px 26px rgba(245,158,11,.4);
+    z-index:9;display:none;opacity:.92;
+  }
+  #soundTip.on{display:block;animation:pop .3s}
+
+  /* ==================== 老师端 ==================== */
+  #sendView .wrap{max-width:560px;margin:0 auto;padding:14px 14px 26px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px 12px}
+  .room{display:flex;align-items:center;gap:9px;font-weight:800;font-size:18px;letter-spacing:.3px}
+  .room .dot{width:10px;height:10px}
+  .me{
+    display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:5px 6px 5px 12px;font-size:14px;color:var(--ink-3);
+  }
+  .me input{border:0;outline:0;background:transparent;font:inherit;font-size:16px;color:var(--ink);
+    width:74px;font-weight:700;padding:2px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    box-shadow:var(--shadow);padding:14px;margin-bottom:12px}
+  .label{font-size:13px;font-weight:700;color:var(--ink-3);margin:2px 0 10px 2px;letter-spacing:.4px}
+  .chips{display:flex;flex-wrap:wrap;gap:9px}
+  .chipbtn{
+    border:1px solid var(--line);background:#f8fafd;color:var(--ink);
+    border-radius:14px;padding:11px 14px;font-size:16px;font-weight:700;
+    cursor:pointer;transition:.14s;line-height:1.1;font-family:inherit;
+  }
+  .chipbtn:active{transform:scale(.96);background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  #sendView textarea{
+    width:100%;min-height:96px;resize:vertical;border:1px solid var(--line);border-radius:16px;
+    padding:13px 14px;font:inherit;font-size:17px;line-height:1.5;color:var(--ink);
+    background:#f8fafd;outline:none;display:block;
+  }
+  #sendView textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 4px rgba(47,107,255,.1)}
+  .row{display:flex;gap:10px;margin-top:11px;align-items:center}
+  .send{
+    flex:1;border:0;border-radius:16px;background:var(--accent);color:#fff;
+    font-size:18px;font-weight:800;padding:15px;cursor:pointer;letter-spacing:1px;
+    box-shadow:0 8px 20px rgba(47,107,255,.28);transition:.14s;font-family:inherit;
+  }
+  .send:active{transform:scale(.985)}
+  .send:disabled{background:#b9c8e6;box-shadow:none;cursor:default}
+  .ghost{border:1px solid var(--line);background:#fff;color:var(--ink-2);border-radius:16px;
+    padding:15px 16px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+  .log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .item{display:flex;align-items:flex-start;gap:10px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;padding:11px 12px}
+  .item .txt{flex:1;font-size:15px;line-height:1.45;word-break:break-word;color:var(--ink)}
+  .item .tm{font-size:12px;color:var(--ink-3);margin-top:4px;font-variant-numeric:tabular-nums}
+  .pill{flex:0 0 auto;font-size:12.5px;font-weight:800;border-radius:999px;padding:5px 10px;
+    white-space:nowrap;letter-spacing:.2px}
+  .pill.wait{background:#eef2f8;color:var(--ink-3)}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  .pill.bad{background:var(--warn-soft);color:#b45309}
+  .empty{color:var(--ink-3);font-size:14px;text-align:center;padding:14px 0}
+  .foot{text-align:center;font-size:12.5px;color:var(--ink-3);margin-top:6px;line-height:1.7}
+
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);opacity:0;
+    background:#0d1b2a;color:#fff;font-size:15px;font-weight:700;padding:11px 20px;
+    border-radius:999px;pointer-events:none;transition:.25s;z-index:50;max-width:86vw;text-align:center;
+  }
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<!-- ========== 选择页 ========== -->
+<div id="pick" class="view">
+  <div class="pickbox">
+    <h1>教室大屏</h1>
+    <p>手机、电脑打开的都是同一个网页，<br>不管你连的是哪个网，都能送到教室大屏。</p>
+    <a class="pickbtn primary" id="goScreen" href="?m=screen">打开大屏端
+      <small>在教室那台电脑上点这个，全屏显示消息</small></a>
+    <a class="pickbtn" id="goSend" href="?m=send">我要发消息
+      <small>老师手机上点这个，发文字到大屏</small></a>
+    <div class="topicbar" id="topicBar"></div>
+  </div>
+</div>
+
+<!-- ========== 大屏端 ========== -->
+<div id="screenView" class="view">
+  <header>
+    <div class="brand"><span class="dot" id="dot"></span><span id="roomName">教室大屏</span></div>
+    <div class="hdr-right">
+      <span id="clock"></span>
+      <button class="iconbtn" id="soundBtn" title="静音 / 取消静音">🔊</button>
+      <button class="iconbtn" id="themeBtn" title="浅色 / 深色">◐</button>
+      <button class="iconbtn" id="fsBtn" title="全屏">⛶</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="idle">
+      <div class="idle-title">大屏已就绪</div>
+      <div class="idle-sub">用手机扫右边二维码，或打开下面的网址，就能发消息上来</div>
+      <div class="urlrow">
+        <div class="urlbox" id="sendUrl">正在获取地址…</div>
+        <div id="qrwrap"><div id="qr"></div></div>
+      </div>
+      <div class="hint">任何网络都能用　·　打开一次后加到手机桌面，以后一点就开</div>
+    </section>
+
+    <section id="msgView" class="hidden">
+      <div id="msgText"></div>
+      <div id="msgMeta"><span id="msgSender"></span><span class="sep">·</span><span id="msgTime"></span></div>
+    </section>
+  </main>
+
+  <footer id="recent"></footer>
+</div>
+
+<!-- ========== 老师端 ========== -->
+<div id="sendView" class="view">
+  <div class="wrap">
+    <div class="top">
+      <div class="room"><span class="dot" id="dot2"></span><span id="roomName2">教室大屏</span></div>
+      <div class="me">我是<input id="nameInput" maxlength="8" placeholder="姓名" autocomplete="off"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">常用语 · 点一下就发出去</div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">自己写</div>
+      <textarea id="text" placeholder="要说的话…（发出去会在教室大屏上放大显示）" maxlength="200"></textarea>
+      <div class="row">
+        <button class="send" id="sendBtn">发送到大屏</button>
+        <button class="ghost" id="clearBtn">清屏</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">最近发出去的 · 看右边是否已送达</div>
+      <ul class="log" id="log"></ul>
+    </div>
+
+    <div class="foot">发不出去时，看右上角那个圆点是绿还是橙<br>橙 = 教室大屏那个网页没打开，或电脑关机了</div>
+  </div>
+</div>
+
+<div id="soundTip">点一下这里，开启提示音</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ==================================================================
+     课堂代号：大屏端和老师端必须用同一个。
+     想换一个私密代号，只改下面这一行引号里的内容，重新上传即可。
+     建议保留 cls 开头、后面随意字母（越长越不容易被别人撞上）。
+     ================================================================== */
+  var TOPIC = 'cls51-7k3m9q2v8x4n';
+  var ROOM  = '五年级1班';
+
+  var BASE = 'https://ntfy.sh/';
+
+  function $(id){ return document.getElementById(id); }
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  var mode = 'pick';
+  try {
+    var q = (location.search.match(/[?&]m=(\w+)/) || [])[1];
+    if (q === 'screen' || q === 'send') mode = q;
+  } catch(e){}
+
+  /* ================= 公网中转（ntfy.sh） ================= */
+
+  var seen = {};          // 去重
+  var lastTime = 0;       // 断线重连时从这里续
+  var handlers = [];
+  var streaming = !!(window.TextDecoder && window.fetch);
+
+  function onMsg(fn){ handlers.push(fn); }
+
+  function dispatch(raw){
+    var d;
+    try { d = JSON.parse(raw); } catch(e){ return; }
+    if (!d || d.event !== 'message') return;
+    if (d.id && seen[d.id]) return;
+    if (d.id) seen[d.id] = 1;
+    if (d.time && d.time > lastTime) lastTime = d.time;
+    var payload = null;
+    try { payload = JSON.parse(d.message); } catch(e){
+      payload = { t: 'msg', text: String(d.message || '') };   // 兼容纯文字
+    }
+    payload._nt = d.time || (Date.now()/1000 | 0);
+    for (var i = 0; i < handlers.length; i++){
+      try { handlers[i](payload); } catch(e){}
+    }
+  }
+
+  // 拉一次（poll），返回 Promise
+  function pollOnce(since){
+    var url = BASE + TOPIC + '/json?poll=1&since=' + encodeURIComponent(since || '5m') + '&_=' + Date.now();
+    return fetch(url, { cache: 'no-store' })
+      .then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+      .then(function(t){
+        var lines = t.split('\n');
+        for (var i = 0; i < lines.length; i++){
+          if (lines[i].trim()) dispatch(lines[i]);
+        }
+        return true;
+      });
+  }
+
+  // 长连接（推送），不支持就退回轮询
+  function startStream(){
+    if (!streaming || !window.ReadableStream) { startPolling(); return; }
+    var since = lastTime ? String(lastTime) : '5m';
+    var url = BASE + TOPIC + '/json?since=' + encodeURIComponent(since) + '&_=' + Date.now();
+    fetch(url, { cache: 'no-store' }).then(function(res){
+      if (!res.ok || !res.body) throw new Error('nostream');
+      var reader = res.body.getReader();
+      var dec = new TextDecoder();
+      var buf = '';
+      function pump(){
+        return reader.read().then(function(r){
+          if (r.done) return;
+          buf += dec.decode(r.value, { stream: true });
+          var i;
+          while ((i = buf.indexOf('\n')) >= 0){
+            var line = buf.slice(0, i); buf = buf.slice(i + 1);
+            if (line.trim()) dispatch(line);
+          }
+          return pump();
+        });
+      }
+      return pump();
+    }).catch(function(){
+      streaming = false;      // 这条路不通，之后统一用轮询
+    }).then(function(){
+      if (streaming) setTimeout(function(){
+        // 长连接被掐断，续上
+        if (streaming) startStream(); else startPolling();
+      }, 800);
+      else startPolling();
+    });
+  }
+
+  var polling = false;
+  function startPolling(){
+    if (polling) return;
+    polling = true;
+    function loop(){
+      var since = lastTime ? String(lastTime) : '5m';
+      pollOnce(since).catch(function(){}).then(function(){
+        setTimeout(loop, 4000);
+      });
+    }
+    loop();
+  }
+
+  function publish(obj){
+    return fetch(BASE + TOPIC, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(obj)
+    }).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    });
+  }
+
+  /* ================= 选择页 ================= */
+
+  if (mode === 'pick'){
+    $('pick').classList.add('on');
+    $('topicBar').innerHTML = '课堂：' + esc(ROOM) + '　代号：' + esc(TOPIC);
+    return;
+  }
+
+  /* ================= 大屏端 ================= */
+
+  if (mode === 'screen'){
+    $('screenView').classList.add('on');
+    document.title = ROOM + ' · 大屏';
+    $('roomName').textContent = ROOM;
+
+    var muted = false, audioCtx = null, soundUnlocked = false;
+    var msgText = $('msgText'), msgView = $('msgView'), msgSender = $('msgSender');
+    var msgTime = $('msgTime'), msgMeta = $('msgMeta'), recent = $('recent');
+    var idle = $('idle'), clock = $('clock'), dot = $('dot');
+    var currentText = '';
+
+    function initAudio(){
+      if (audioCtx){ if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
+      try{
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        audioCtx = new AC();
+        soundUnlocked = true;
+        $('soundTip').classList.remove('on');
+      }catch(e){}
+    }
+
+    function chime(){
+      if (muted) return;
+      initAudio();
+      if (!audioCtx) return;
+      var t0 = audioCtx.currentTime + 0.02;
+      var notes = [[880,0],[1174.66,0.17],[880,0.34],[1174.66,0.51]];
+      for (var i = 0; i < notes.length; i++){
+        (function(f, d){
+          var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(f, t0 + d);
+          g.gain.setValueAtTime(0.0001, t0 + d);
+          g.gain.linearRampToValueAtTime(1.0, t0 + d + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.30);
+          o.connect(g); g.connect(audioCtx.destination);
+          o.start(t0 + d); o.stop(t0 + d + 0.34);
+        })(notes[i][0], notes[i][1]);
+      }
+    }
+
+    function armAudio(){
+      initAudio();
+      if (audioCtx && audioCtx.state === 'running'){
+        soundUnlocked = true;
+        $('soundTip').classList.remove('on');
+      }
+    }
+
+    function goFullscreen(){
+      try{
+        if (document.fullscreenElement) return;
+        var el = document.documentElement;
+        if (!el.requestFullscreen) return;
+        var p = el.requestFullscreen({ navigationUI: 'hide' });
+        if (p && p.catch) p.catch(function(){});
+      }catch(e){}
+    }
+
+    function gesture(e){
+      armAudio();
+      if (e && e.target && e.target.closest && e.target.closest('.iconbtn')) return;
+      goFullscreen();
+    }
+    document.addEventListener('click', gesture);
+    document.addEventListener('keydown', gesture);
+    document.addEventListener('pointerdown', gesture);
+
+    $('soundBtn').addEventListener('click', function(e){
+      e.stopPropagation();
+      muted = !muted;
+      this.textContent = muted ? '🔇' : '🔊';
+      if (!muted){ armAudio(); chime(); }
+    });
+
+    var dark = false;
+    try { dark = localStorage.getItem('screen_theme') === 'dark'; } catch(e){}
+    if (dark) document.documentElement.classList.add('dark');
+
+    $('themeBtn').addEventListener('click', function(){
+      document.documentElement.classList.toggle('dark');
+      try { localStorage.setItem('screen_theme',
+        document.documentElement.classList.contains('dark') ? 'dark' : 'light'); } catch(e){}
+      setTimeout(function(){ if (currentText) fit(currentText); }, 60);
+    });
+
+    $('fsBtn').addEventListener('click', function(){
+      if (!document.fullscreenElement) goFullscreen();
+      else if (document.exitFullscreen) document.exitFullscreen();
+    });
+
+    function tickClock(){
+      var d = new Date();
+      clock.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    function formatTime(ms){
+      var d = new Date(ms || Date.now());
+      return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    // 字号：从大往小试，第一个装得下的就是最大
+    function fit(text){
+      currentText = text || '';
+      var el = msgText, box = msgView;
+      box.style.transition = 'none';
+      var cs = window.getComputedStyle(box);
+      var pT = parseFloat(cs.paddingTop) || 0, pB = parseFloat(cs.paddingBottom) || 0;
+      var pL = parseFloat(cs.paddingLeft) || 0, pR = parseFloat(cs.paddingRight) || 0;
+      var availH = box.clientHeight - pT - pB - (msgMeta.offsetHeight || 34) - 10;
+      var availW = box.clientWidth - pL - pR;
+      box.style.transition = '';
+      if (availH < 60) availH = 60;
+      if (availW < 60) availW = 60;
+      var best = 26;
+      for (var s = 620; s >= 26; s -= 10){
+        el.style.fontSize = s + 'px';
+        if (el.scrollHeight <= availH && el.scrollWidth <= availW + 2){ best = s; break; }
+      }
+      el.style.fontSize = best + 'px';
+    }
+
+    function showIdle(){
+      $('screenView').classList.remove('focus');
+      msgView.classList.add('hidden');
+      idle.classList.remove('hidden');
+    }
+
+    function showMessage(m, animate){
+      idle.classList.add('hidden');
+      msgView.classList.remove('hidden');
+      $('screenView').classList.add('focus');
+      msgText.textContent = m.text || '';
+      msgSender.textContent = m.by || '老师';
+      msgTime.textContent = formatTime(m.ts);
+      fit(m.text);
+      goFullscreen();
+      if (animate){
+        msgView.classList.remove('flash'); void msgView.offsetWidth;
+        msgView.classList.add('flash');
+        msgView.classList.remove('pop'); void msgView.offsetWidth;
+        msgView.classList.add('pop');
+      }
+    }
+
+    function renderRecent(list){
+      if (!list || !list.length){ recent.innerHTML = ''; return; }
+      var html = '';
+      for (var i = 0; i < list.length; i++){
+        var t = list[i].text || '';
+        if (t.length > 26) t = t.slice(0, 26) + '…';
+        html += '<div class="chip"><b>' + esc(list[i].by || '老师') + '</b>' + esc(t) + '</div>';
+      }
+      recent.innerHTML = html;
+    }
+
+    var history = [];
+    var booting = true;      // 刚打开页面时先把历史安静地取回来，不响铃、不闪
+
+    onMsg(function(m){
+      if (m.t === 'ack' || m.t === 'ping') return;
+      if (m.t === 'clear'){
+        history = [];
+        renderRecent(history);
+        showIdle();
+        return;
+      }
+      if (m.t !== 'msg') return;
+      history.push(m);
+      if (history.length > 8) history.shift();
+      renderRecent(history);
+      showMessage(m, !booting);
+      if (!booting) chime();
+      // 回执：告诉老师"大屏已经显示出来了"
+      publish({ t: 'ack', id: m.id || '', ts: Date.now() }).catch(function(){});
+      if (!soundUnlocked && !muted) $('soundTip').classList.add('on');
+    });
+
+    // 心跳：老师端靠它判断大屏在不在
+    setInterval(function(){
+      publish({ t: 'ping', ts: Date.now() }).catch(function(){});
+    }, 20000);
+    publish({ t: 'ping', ts: Date.now() }).catch(function(){});
+
+    // 地址 / 二维码
+    function sendUrl(){
+      var base = location.href.split('?')[0].split('#')[0];
+      return base + '?m=send';
+    }
+    function makeQR(text){
+      function draw(){
+        if (typeof window.QRCode === 'undefined') return false;
+        try{
+          $('qr').innerHTML = '';
+          new window.QRCode($('qr'), {
+            text: text, width: 200, height: 200,
+            colorDark: '#0d1b2a', colorLight: '#ffffff',
+            correctLevel: window.QRCode.CorrectLevel.M
+          });
+          $('qrwrap').classList.add('on');
+          return true;
+        }catch(e){ return false; }
+      }
+      if (draw()) return;
+      var s = document.createElement('script');
+      s.src = 'https://cdn.bootcdn.net/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      s.onload = draw;
+      s.onerror = function(){
+        var s2 = document.createElement('script');
+        s2.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+        s2.onload = draw;
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s);
+    }
+
+    var u = sendUrl();
+    if (location.protocol === 'file:'){
+      $('sendUrl').textContent = '这是本机测试模式';
+      $('idle').querySelector('.hint').textContent =
+        '把 index.html 上传到 GitHub Pages 后，这里会自动显示手机要用的网址和二维码';
+    } else {
+      $('sendUrl').textContent = u.replace(/^https?:\/\//, '');
+      makeQR(u);
+    }
+
+    // 先安静地把最后一条取回来（刷新页面不重响），再开始实时收
+    pollOnce('2h').then(function(){
+      if (!history.length) showIdle();
+      booting = false;
+      dot.classList.add('on');
+      startStream();
+    }).catch(function(){
+      booting = false;
+      showIdle();
+      startStream();
+    });
+
+    window.addEventListener('resize', function(){
+      clearTimeout(window.__fit);
+      window.__fit = setTimeout(function(){ if (currentText) fit(currentText); }, 120);
+    });
+    return;
+  }
+
+  /* ================= 老师端 ================= */
+
+  if (mode === 'send'){
+    $('sendView').classList.add('on');
+    document.title = '发消息到' + ROOM;
+    $('roomName2').textContent = ROOM;
+
+    var PHRASES = [
+      '上课了，请安静',
+      '请把书翻到第__页',
+      '这道题再想 2 分钟',
+      '小组讨论开始',
+      '请一位同学回答',
+      '请看大屏',
+      '坐好了，注意听讲',
+      '课间休息',
+      '下课了，请收拾好桌面'
+    ];
+
+    var log = [], screenOnline = false, name = '';
+    try { name = localStorage.getItem('teacher_name') || ''; } catch(e){}
+    $('nameInput').value = name;
+    $('nameInput').addEventListener('input', function(){
+      try { localStorage.setItem('teacher_name', this.value.trim()); } catch(e){}
+    });
+
+    function teacherName(){
+      var v = ($('nameInput').value || '').trim();
+      return v || '老师';
+    }
+
+    var chips = $('chips');
+    for (var i = 0; i < PHRASES.length; i++){
+      (function(p){
+        var b = document.createElement('button');
+        b.className = 'chipbtn';
+        b.type = 'button';
+        b.textContent = p;
+        b.addEventListener('click', function(){
+          if (p.indexOf('__') >= 0){
+            $('text').value = p.replace('__', '');
+            $('text').focus();
+            var t = $('text');
+            try { t.setSelectionRange(t.value.indexOf('页'), t.value.indexOf('页')); } catch(e){}
+            toast('把页码填进去再发');
+            return;
+          }
+          send(p);
+        });
+        chips.appendChild(b);
+      })(PHRASES[i]);
+    }
+
+    function send(text, kind){
+      text = (text || '').trim();
+      if (kind !== 'clear' && !text){ toast('先写点什么'); return; }
+      var btn = $('sendBtn');
+      btn.disabled = true;
+      var id = String(Date.now()) + Math.random().toString(36).slice(2, 7);
+      var item = { id: id, text: kind === 'clear' ? '（清空大屏）' : text, ts: Date.now(), ack: null, sending: true };
+      log.unshift(item);
+      renderLog();
+      publish({
+        t: kind === 'clear' ? 'clear' : 'msg',
+        id: id,
+        text: text,
+        by: teacherName(),
+        ts: Date.now()
+      }).then(function(){
+        item.sending = false;
+        if (kind !== 'clear') $('text').value = '';
+        toast('已发出');
+      }).catch(function(){
+        item.sending = false;
+        item.failed = true;
+        toast('发不出去，检查一下网络');
+      }).then(function(){
+        btn.disabled = false;
+        renderLog();
+      });
+    }
+
+    $('sendBtn').addEventListener('click', function(){ send($('text').value); });
+    $('clearBtn').addEventListener('click', function(){
+      if (confirm('把大屏上的内容清空？')) send('', 'clear');
+    });
+    $('text').addEventListener('keydown', function(e){
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(this.value);
+    });
+
+    function renderLog(){
+      var box = $('log');
+      if (!log.length){ box.innerHTML = '<li class="empty">还没发过消息</li>'; return; }
+      var html = '';
+      for (var i = 0; i < log.length && i < 12; i++){
+        var it = log[i], cls = 'wait', label = '等待中';
+        if (it.sending){ label = '发送中'; }
+        else if (it.failed){ cls = 'bad'; label = '没发出去'; }
+        else if (it.ack){ cls = 'ok'; label = '已送达大屏'; }
+        else if (!screenOnline){ cls = 'bad'; label = '大屏未开'; }
+        else { label = '待确认'; }
+        var d = new Date(it.ts);
+        html += '<li class="item"><div class="txt">' + esc(it.text) +
+          '<div class="tm">' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + '</div></div>' +
+          '<span class="pill ' + cls + '">' + label + '</span></li>';
+      }
+      box.innerHTML = html;
+    }
+
+    var toastTimer = null;
+    function toast(msg){
+      var t = $('toast');
+      t.textContent = msg;
+      t.classList.add('on');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function(){ t.classList.remove('on'); }, 1800);
+    }
+
+    var lastPing = 0;
+    function setOnline(v){
+      screenOnline = v;
+      $('dot2').className = 'dot' + (v ? ' on' : '');
+      renderLog();
+    }
+
+    onMsg(function(m){
+      if (m.t === 'ping'){ lastPing = Date.now(); setOnline(true); return; }
+      if (m.t === 'ack'){
+        for (var i = 0; i < log.length; i++){
+          if (log[i].id === m.id){ log[i].ack = m.ts || Date.now(); }
+        }
+        renderLog();
+        return;
+      }
+    });
+
+    // 大屏 50 秒没心跳就算离线
+    setInterval(function(){
+      if (screenOnline && Date.now() - lastPing > 50000) setOnline(false);
+    }, 5000);
+
+    renderLog();
+    pollOnce('1m').then(function(){ startStream(); }).catch(function(){ startStream(); });
+    return;
+  }
+
+})();
+</script>
+</body>
+</html>
