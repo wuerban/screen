@@ -327,8 +327,22 @@
      想换一个私密代号，只改下面这一行引号里的内容，重新上传即可。
      建议保留 cls 开头、后面随意字母（越长越不容易被别人撞上）。
      ================================================================== */
-  var TOPIC = 'cls51-7k3m9q2v8x4n';
-  var ROOM  = '五年级二班';
+  var TOPIC_DEFAULT = 'cls51-7k3m9q2v8x4n';
+  var ROOM_DEFAULT  = '五年级二班';
+
+  /* 想开第二个教室、又不想改代码？直接在网址后面加参数就行：
+       ...?m=send&c=cls88-abcd1234&r=五年级三班
+     c = 频道代号（要和大屏.ps1 里写的 TOPIC 一致），r = 教室名。
+     不加参数就是默认的五年级二班。 */
+  var TOPIC = TOPIC_DEFAULT;
+  var ROOM  = ROOM_DEFAULT;
+  try {
+    var _qs = new URLSearchParams(location.search);
+    var _c = _qs.get('c');
+    if (_c) TOPIC = _c.replace(/[^A-Za-z0-9_-]/g, '');
+    var _r = _qs.get('r');
+    if (_r) ROOM = _r;
+  } catch(e){}
 
   /* 老师端网址（大屏上显示的二维码扫出来就是这个）。
      大屏在本机双击打开、老师端放在公网时，这里必须填公网网址，
@@ -439,15 +453,29 @@
     loop();
   }
 
+  // 发一条消息。失败了自动再试 2 次（间隔 1 秒、2.5 秒）——
+  // 手机在教室信号差、或者被服务器临时限流，多半等一下就通了。
+  // 重试可能让同一条发两次，但每条消息带唯一 id，大屏那边会认出来并丢掉重复的。
   function publish(obj){
-    return fetch(BASE + TOPIC, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(obj)
-    }).then(function(r){
-      if (!r.ok) throw new Error('http ' + r.status);
-      return r.json();
-    });
+    var raw = JSON.stringify(obj);
+    var attempt = 0;
+    function once(){
+      attempt++;
+      return fetch(BASE + TOPIC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: raw
+      }).then(function(r){
+        if (!r.ok) throw new Error('http ' + r.status);
+        return r.json();
+      }).catch(function(err){
+        if (attempt >= 3) throw err;
+        return new Promise(function(res){
+          setTimeout(res, attempt === 1 ? 1000 : 2500);
+        }).then(once);
+      });
+    }
+    return once();
   }
 
   /* ================= 选择页 ================= */
@@ -642,15 +670,20 @@
 
     // 心跳：老师端靠它判断大屏在不在
     setInterval(function(){
-      publish({ t: 'ping', ts: Date.now() }).catch(function(){});
+      publish({ t: 'ping', ts: Date.now(), room: ROOM }).catch(function(){});
     }, 20000);
     publish({ t: 'ping', ts: Date.now() }).catch(function(){});
 
     // 地址 / 二维码
     function sendUrl(){
-      if (SEND_BASE) return SEND_BASE.replace(/[?#].*$/, '') + '?m=send';
-      var base = location.href.split('?')[0].split('#')[0];
-      return base + '?m=send';
+      var base;
+      if (SEND_BASE) base = SEND_BASE.replace(/[?#].*$/, '');
+      else base = location.href.split('?')[0].split('#')[0];
+      var u = base + '?m=send';
+      if (TOPIC !== TOPIC_DEFAULT || ROOM !== ROOM_DEFAULT){
+        u += '&c=' + encodeURIComponent(TOPIC) + '&r=' + encodeURIComponent(ROOM);
+      }
+      return u;
     }
 
     var qrWaiting = [];
@@ -880,7 +913,7 @@
 
     // 大屏 50 秒没心跳就算离线
     setInterval(function(){
-      if (screenOnline && Date.now() - lastPing > 50000) setOnline(false);
+      if (screenOnline && Date.now() - lastPing > 130000) setOnline(false);
     }, 5000);
 
     renderLog();
