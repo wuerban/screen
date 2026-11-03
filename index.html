@@ -182,13 +182,6 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;
     box-shadow:var(--shadow);padding:14px;margin-bottom:12px}
   .label{font-size:13px;font-weight:700;color:var(--ink-3);margin:2px 0 10px 2px;letter-spacing:.4px}
-  .chips{display:flex;flex-wrap:wrap;gap:9px}
-  .chipbtn{
-    border:1px solid var(--line);background:#f8fafd;color:var(--ink);
-    border-radius:14px;padding:11px 14px;font-size:16px;font-weight:700;
-    cursor:pointer;transition:.14s;line-height:1.1;font-family:inherit;
-  }
-  .chipbtn:active{transform:scale(.96);background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
   #sendView textarea{
     width:100%;min-height:96px;resize:vertical;border:1px solid var(--line);border-radius:16px;
     padding:13px 14px;font:inherit;font-size:17px;line-height:1.5;color:var(--ink);
@@ -283,12 +276,7 @@
     </div>
 
     <div class="card">
-      <div class="label">常用语 · 点一下就发出去</div>
-      <div class="chips" id="chips"></div>
-    </div>
-
-    <div class="card">
-      <div class="label">自己写</div>
+      <div class="label">通知内容</div>
       <textarea id="text" placeholder="要说的话…（发出去会在教室大屏上放大显示）" maxlength="200"></textarea>
       <div class="row">
         <button class="send" id="sendBtn">发送到大屏</button>
@@ -297,7 +285,7 @@
     </div>
 
     <div class="card">
-      <div class="label">最近发出去的 · 看右边是否已送达</div>
+      <div class="label">发送记录</div>
       <ul class="log" id="log"></ul>
     </div>
 
@@ -778,18 +766,6 @@
     document.title = '发消息到' + ROOM;
     $('roomName2').textContent = ROOM;
 
-    var PHRASES = [
-      '上课了，请安静',
-      '请把书翻到第__页',
-      '这道题再想 2 分钟',
-      '小组讨论开始',
-      '请一位同学回答',
-      '请看大屏',
-      '坐好了，注意听讲',
-      '课间休息',
-      '下课了，请收拾好桌面'
-    ];
-
     var log = [], screenOnline = false, name = '';
     try { name = localStorage.getItem('teacher_name') || ''; } catch(e){}
     $('nameInput').value = name;
@@ -800,28 +776,6 @@
     function teacherName(){
       var v = ($('nameInput').value || '').trim();
       return v || '老师';
-    }
-
-    var chips = $('chips');
-    for (var i = 0; i < PHRASES.length; i++){
-      (function(p){
-        var b = document.createElement('button');
-        b.className = 'chipbtn';
-        b.type = 'button';
-        b.textContent = p;
-        b.addEventListener('click', function(){
-          if (p.indexOf('__') >= 0){
-            $('text').value = p.replace('__', '');
-            $('text').focus();
-            var t = $('text');
-            try { t.setSelectionRange(t.value.indexOf('页'), t.value.indexOf('页')); } catch(e){}
-            toast('把页码填进去再发');
-            return;
-          }
-          send(p);
-        });
-        chips.appendChild(b);
-      })(PHRASES[i]);
     }
 
     function send(text, kind){
@@ -903,6 +857,8 @@
         return;
       }
       if (m.t === 'ack'){
+        // 大屏回过话，说明它肯定在线——顺便把绿点刷新一下
+        lastPing = Date.now(); setOnline(true);
         for (var i = 0; i < log.length; i++){
           if (log[i].id === m.id){ log[i].ack = m.ts || Date.now(); }
         }
@@ -911,9 +867,22 @@
       }
     });
 
-    // 大屏 50 秒没心跳就算离线
+    // 打开页面时问一句「在不在」：大屏收到会立刻回一次心跳。
+    // 这样不用干等 5 分钟的定时心跳，绿点马上就是准的。
+    // 节流 60 秒，防止反复刷新页面时狂发（每发一条都要占中转站的每日额度）。
+    var lastHello = 0;
+    function sayHello(){
+      if (Date.now() - lastHello < 60000) return;
+      lastHello = Date.now();
+      publish({ t: 'hello', ts: Date.now() }).catch(function(){});
+    }
+    sayHello();
+
+    // 大屏 12 分钟没动静才算离线。
+    // 【心跳优化版】大屏的定时心跳已从 30 秒改成 5 分钟，这里必须跟着放宽，
+    // 否则手机上会一直闪「大屏未开」。离线后再打开页面会重新问一次，不会误判到底。
     setInterval(function(){
-      if (screenOnline && Date.now() - lastPing > 130000) setOnline(false);
+      if (screenOnline && Date.now() - lastPing > 720000) setOnline(false);
     }, 5000);
 
     renderLog();
